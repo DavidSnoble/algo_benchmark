@@ -1,5 +1,5 @@
 const std = @import("std");
-const bench = @import("zig-bench/bench.zig");
+const zbench = @import("zbench/zbench.zig");
 
 fn min3(a: u32, b: u32, c: u32) u32 {
     return min(a, min(b, c));
@@ -51,23 +51,7 @@ fn levenshtein(s1: []const u8, s2: []const u8, allocator: std.mem.Allocator) !u3
     return d[m][n];
 }
 
-// Benchmarking function
-fn benchmark(comptime test_cases: anytype, allocator: std.mem.Allocator) !void {
-    var timer = try std.time.Timer.start();
-    const start = timer.lap();
-
-    for (test_cases) |case| {
-        const distance = try levenshtein(case[0], case[1], allocator);
-        std.debug.print("Distance between '{s}' and '{s}': {d}\n", .{ case[0], case[1], distance });
-    }
-
-    const end = timer.read();
-    const elapsed_ms = @as(f64, @floatFromInt(end - start)) / std.time.ns_per_ms;
-
-    std.debug.print("Total time elapsed: {d} ms\n", .{elapsed_ms});
-}
-
-pub fn main() !void {
+fn myBenchmark(allocator: std.mem.Allocator) void {
     const test_cases = [_][2][]const u8{
         .{ "kitten", "sitting" },
         .{ "flaw", "lawn" },
@@ -77,14 +61,18 @@ pub fn main() !void {
         .{ "a", "" },
     };
 
-    try bench.benchmark(struct {
-        pub const args = test_cases;
+    for (test_cases) |case| {
+        _ = levenshtein(case[0], case[1], allocator) catch unreachable;
+    }
+}
 
-        pub fn benchLevenshtein(test_case: [2][]const u8) !void {
-            var gpa_local = std.heap.GeneralPurposeAllocator(.{}){};
-            defer _ = gpa_local.deinit();
-            const allocator = gpa_local.allocator();
-            _ = try levenshtein(test_case[0], test_case[1], allocator);
-        }
-    });
+pub fn main() !void {
+    const stdout = std.io.getStdOut().writer();
+    var bench = zbench.Benchmark.init(std.heap.page_allocator, .{});
+    defer bench.deinit();
+
+    try bench.add("Levenshtein Distance Benchmark", myBenchmark, .{});
+
+    try stdout.writeAll("\n");
+    try bench.run(stdout);
 }
